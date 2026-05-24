@@ -1,18 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { StockData, WatchlistEntry } from '@/lib/stocks/types'
 import { PriceChart } from '@/components/stocks/PriceChart'
 import { ALL_RANGES, type RangeKey } from '@/lib/stocks/history'
+import { SYMBOL_SECTORS, STOCK_SECTORS, ETF_CATEGORIES } from '@/lib/stocks/sectors'
 
 const RATING_LABELS: Record<string, string> = {
-  strongBuy: 'Strong Buy',
-  buy: 'Buy',
-  hold: 'Hold',
-  underperform: 'Underperform',
-  sell: 'Sell',
-  strongSell: 'Strong Sell',
+  strongBuy: 'Strong Buy', buy: 'Buy', hold: 'Hold',
+  underperform: 'Underperform', sell: 'Sell', strongSell: 'Strong Sell',
 }
 
 function ratingColor(key: string): string {
@@ -26,11 +23,39 @@ function fmt(n: number, d = 2) {
   return n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 }
 
+function capLabel(marketCap: number | null): 'Large' | 'Mid' | 'Small' | null {
+  if (!marketCap) return null
+  if (marketCap >= 10e9) return 'Large'
+  if (marketCap >= 2e9)  return 'Mid'
+  return 'Small'
+}
+
 interface WatchlistItemData {
   entry: WatchlistEntry
   stock: StockData | null
   loading: boolean
 }
+
+// ── Filter chip component ──────────────────────────────────────────────────
+
+function Chip({
+  label, active, onClick,
+}: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+        active
+          ? 'bg-blue-600 text-white'
+          : 'bg-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ── WatchCard ─────────────────────────────────────────────────────────────
 
 function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () => void }) {
   const { entry, stock, loading } = item
@@ -49,13 +74,13 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
       .finally(() => setHistLoading(false))
   }, [range, stock, entry.symbol, history])
 
-  const gainSinceAdded =
-    stock ? ((stock.price - entry.priceWhenAdded) / entry.priceWhenAdded) * 100 : null
+  const gainSinceAdded = stock
+    ? ((stock.price - entry.priceWhenAdded) / entry.priceWhenAdded) * 100
+    : null
 
-  const upside =
-    stock?.analyst?.targetMean
-      ? ((stock.analyst.targetMean - stock.price) / stock.price) * 100
-      : null
+  const upside = stock?.analyst?.targetMean
+    ? ((stock.analyst.targetMean - stock.price) / stock.price) * 100
+    : null
 
   const totalA = stock?.analyst
     ? stock.analyst.strongBuy + stock.analyst.buy + stock.analyst.hold + stock.analyst.sell + stock.analyst.strongSell
@@ -63,20 +88,32 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
 
   const isPositive = stock ? stock.changePercent >= 0 : true
   const added = new Date(entry.addedAt).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+    month: 'short', day: 'numeric', year: 'numeric',
   })
+
+  const sector = SYMBOL_SECTORS[entry.symbol]
+  const cap    = stock ? capLabel(stock.marketCap) : null
 
   return (
     <div className="rounded-2xl border border-slate-700 bg-slate-800/60 p-5">
+      {/* Header */}
       <div className="mb-3 flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <span className="text-xl font-black text-white">{entry.symbol}</span>
             {stock && (
               <span className="rounded bg-slate-700 px-1.5 py-0.5 text-xs font-medium uppercase text-slate-400">
                 {stock.quoteType === 'ETF' ? 'ETF' : 'STOCK'}
+              </span>
+            )}
+            {cap && (
+              <span className="rounded bg-slate-700/60 px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                {cap} Cap
+              </span>
+            )}
+            {sector && (
+              <span className="rounded bg-slate-700/40 px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                {sector}
               </span>
             )}
           </div>
@@ -85,7 +122,7 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
         </div>
         <button
           onClick={onRemove}
-          className="text-slate-600 hover:text-red-400 transition-colors text-lg leading-none"
+          className="text-slate-600 hover:text-red-400 transition-colors text-lg leading-none ml-2"
           aria-label="Remove from watchlist"
         >
           ×
@@ -120,7 +157,7 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
             )}
           </div>
 
-          {/* Price chart */}
+          {/* Chart */}
           <div className="relative mb-1">
             {histLoading && !history[range] && (
               <div className="h-20 animate-pulse rounded-lg bg-slate-700/30" />
@@ -137,9 +174,7 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
                 key={r}
                 onClick={() => setRange(r)}
                 className={`flex-1 rounded py-0.5 text-xs font-semibold transition-colors ${
-                  range === r
-                    ? 'bg-slate-600 text-white'
-                    : 'text-slate-500 hover:text-slate-300'
+                  range === r ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
                 {r}
@@ -147,6 +182,7 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
             ))}
           </div>
 
+          {/* Analyst */}
           {stock.analyst ? (
             <div className="rounded-xl bg-slate-700/40 p-3">
               <div className="mb-2 flex items-center justify-between">
@@ -155,42 +191,27 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
                   {RATING_LABELS[stock.analyst.ratingKey] ?? stock.analyst.ratingKey}
                 </span>
               </div>
-
               {totalA > 0 && (
                 <div className="mb-2 flex h-1.5 overflow-hidden rounded-full">
-                  {stock.analyst.strongBuy > 0 && (
-                    <div className="bg-emerald-500" style={{ width: `${(stock.analyst.strongBuy / totalA) * 100}%` }} />
-                  )}
-                  {stock.analyst.buy > 0 && (
-                    <div className="bg-emerald-400" style={{ width: `${(stock.analyst.buy / totalA) * 100}%` }} />
-                  )}
-                  {stock.analyst.hold > 0 && (
-                    <div className="bg-yellow-400" style={{ width: `${(stock.analyst.hold / totalA) * 100}%` }} />
-                  )}
-                  {stock.analyst.sell > 0 && (
-                    <div className="bg-red-400" style={{ width: `${(stock.analyst.sell / totalA) * 100}%` }} />
-                  )}
-                  {stock.analyst.strongSell > 0 && (
-                    <div className="bg-red-600" style={{ width: `${(stock.analyst.strongSell / totalA) * 100}%` }} />
-                  )}
+                  {stock.analyst.strongBuy  > 0 && <div className="bg-emerald-500" style={{ width: `${(stock.analyst.strongBuy  / totalA) * 100}%` }} />}
+                  {stock.analyst.buy        > 0 && <div className="bg-emerald-400" style={{ width: `${(stock.analyst.buy        / totalA) * 100}%` }} />}
+                  {stock.analyst.hold       > 0 && <div className="bg-yellow-400"  style={{ width: `${(stock.analyst.hold       / totalA) * 100}%` }} />}
+                  {stock.analyst.sell       > 0 && <div className="bg-red-400"     style={{ width: `${(stock.analyst.sell       / totalA) * 100}%` }} />}
+                  {stock.analyst.strongSell > 0 && <div className="bg-red-600"     style={{ width: `${(stock.analyst.strongSell / totalA) * 100}%` }} />}
                 </div>
               )}
-
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-500">{stock.analyst.analystCount} analysts</span>
                 {stock.analyst.targetMean && upside != null && (
                   <span className={upside >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                    Target ${fmt(stock.analyst.targetMean)} &nbsp;
-                    <span className="font-semibold">
-                      ({upside >= 0 ? '+' : ''}{fmt(upside)}% upside)
-                    </span>
+                    Target ${fmt(stock.analyst.targetMean)}{' '}
+                    <span className="font-semibold">({upside >= 0 ? '+' : ''}{fmt(upside)}% upside)</span>
                   </span>
                 )}
               </div>
-
               {stock.analyst.targetMean && (
                 <div className="mt-2 pt-2 border-t border-slate-600/50 text-xs text-slate-500">
-                  Analyst mean target vs. your entry:{' '}
+                  Analyst mean vs. your entry:{' '}
                   {(() => {
                     const diff = ((stock.analyst.targetMean! - entry.priceWhenAdded) / entry.priceWhenAdded) * 100
                     return (
@@ -225,6 +246,8 @@ function WatchCard({ item, onRemove }: { item: WatchlistItemData; onRemove: () =
   )
 }
 
+// ── Portfolio Summary ──────────────────────────────────────────────────────
+
 function PortfolioSummary({ items }: { items: WatchlistItemData[] }) {
   const loaded = items.filter((i) => i.stock && !i.loading)
   if (loaded.length === 0) return null
@@ -235,8 +258,8 @@ function PortfolioSummary({ items }: { items: WatchlistItemData[] }) {
   }))
 
   const avgGain = gains.reduce((s, g) => s + g.gain, 0) / gains.length
-  const best = gains.reduce((a, b) => (a.gain > b.gain ? a : b))
-  const worst = gains.reduce((a, b) => (a.gain < b.gain ? a : b))
+  const best    = gains.reduce((a, b) => (a.gain > b.gain ? a : b))
+  const worst   = gains.reduce((a, b) => (a.gain < b.gain ? a : b))
   const winners = gains.filter((g) => g.gain >= 0).length
 
   return (
@@ -270,9 +293,93 @@ function PortfolioSummary({ items }: { items: WatchlistItemData[] }) {
   )
 }
 
+// ── Filter bar ─────────────────────────────────────────────────────────────
+
+interface Filters {
+  type: 'All' | 'Stocks' | 'ETFs'
+  cap: 'All' | 'Large' | 'Mid' | 'Small'
+  sector: string   // '' = All
+}
+
+function FilterBar({
+  filters, onChange, items,
+}: {
+  filters: Filters
+  onChange: (f: Filters) => void
+  items: WatchlistItemData[]
+}) {
+  // Only show sectors/ETF categories that exist in the current watchlist
+  const presentSectors = useMemo(() => {
+    const set = new Set<string>()
+    items.forEach((i) => {
+      const s = SYMBOL_SECTORS[i.entry.symbol]
+      if (s) set.add(s)
+    })
+    return [...STOCK_SECTORS, ...ETF_CATEGORIES].filter((s) => set.has(s))
+  }, [items])
+
+  const hasStocks = items.some((i) => i.stock?.quoteType !== 'ETF')
+  const hasETFs   = items.some((i) => i.stock?.quoteType === 'ETF')
+
+  if (items.length <= 1) return null
+
+  return (
+    <div className="mb-5 space-y-2">
+      {/* Type */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <span className="shrink-0 text-xs text-slate-600 w-12">Type</span>
+        {(['All', ...(hasStocks ? ['Stocks'] : []), ...(hasETFs ? ['ETFs'] : [])] as const).map((t) => (
+          <Chip
+            key={t}
+            label={t}
+            active={filters.type === t}
+            onClick={() => onChange({ ...filters, type: t as Filters['type'] })}
+          />
+        ))}
+      </div>
+
+      {/* Market cap */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <span className="shrink-0 text-xs text-slate-600 w-12">Cap</span>
+        {(['All', 'Large', 'Mid', 'Small'] as const).map((c) => (
+          <Chip
+            key={c}
+            label={c === 'All' ? 'All Sizes' : `${c} Cap`}
+            active={filters.cap === c}
+            onClick={() => onChange({ ...filters, cap: c })}
+          />
+        ))}
+      </div>
+
+      {/* Sector / category */}
+      {presentSectors.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+          <span className="shrink-0 text-xs text-slate-600 w-12">Sector</span>
+          <Chip
+            label="All"
+            active={filters.sector === ''}
+            onClick={() => onChange({ ...filters, sector: '' })}
+          />
+          {presentSectors.map((s) => (
+            <Chip
+              key={s}
+              label={s}
+              active={filters.sector === s}
+              onClick={() => onChange({ ...filters, sector: s })}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
+
 export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItemData[]>([])
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
+  const [filters, setFilters] = useState<Filters>({ type: 'All', cap: 'All', sector: '' })
 
   function parseWatchlist(raw: string | null): WatchlistEntry[] {
     try { return raw ? JSON.parse(raw) : [] } catch { return [] }
@@ -334,6 +441,33 @@ export default function WatchlistPage() {
     fetchLiveData(entries)
   }
 
+  // Apply filters
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      const { stock, entry } = item
+
+      // Type
+      if (filters.type === 'Stocks' && stock?.quoteType === 'ETF') return false
+      if (filters.type === 'ETFs'   && stock?.quoteType !== 'ETF') return false
+
+      // Cap
+      if (filters.cap !== 'All' && stock) {
+        if (capLabel(stock.marketCap) !== filters.cap) return false
+      }
+
+      // Sector
+      if (filters.sector !== '') {
+        if (SYMBOL_SECTORS[entry.symbol] !== filters.sector) return false
+      }
+
+      return true
+    })
+  }, [items, filters])
+
+  const activeFilterCount = (filters.type !== 'All' ? 1 : 0) +
+    (filters.cap !== 'All' ? 1 : 0) +
+    (filters.sector !== '' ? 1 : 0)
+
   return (
     <div className="min-h-screen">
       <nav className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
@@ -376,7 +510,17 @@ export default function WatchlistPage() {
           <>
             <div className="mb-4 flex items-center justify-between">
               <p className="text-sm text-slate-400">
-                {items.length} stock{items.length !== 1 ? 's' : ''} tracked
+                {filtered.length !== items.length
+                  ? `${filtered.length} of ${items.length} stocks`
+                  : `${items.length} stock${items.length !== 1 ? 's' : ''} tracked`}
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => setFilters({ type: 'All', cap: 'All', sector: '' })}
+                    className="ml-2 text-xs text-blue-400 hover:text-blue-300"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </p>
               <button
                 onClick={() => {
@@ -394,11 +538,29 @@ export default function WatchlistPage() {
 
             <PortfolioSummary items={items} />
 
-            <div className="flex flex-col gap-4">
-              {items.map((item) => (
-                <WatchCard key={item.entry.symbol} item={item} onRemove={() => removeItem(item.entry.symbol)} />
-              ))}
-            </div>
+            <FilterBar filters={filters} onChange={setFilters} items={items} />
+
+            {filtered.length === 0 ? (
+              <div className="py-16 text-center">
+                <p className="text-slate-500 text-sm">No stocks match these filters.</p>
+                <button
+                  onClick={() => setFilters({ type: 'All', cap: 'All', sector: '' })}
+                  className="mt-3 text-xs text-blue-400 hover:text-blue-300"
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {filtered.map((item) => (
+                  <WatchCard
+                    key={item.entry.symbol}
+                    item={item}
+                    onRemove={() => removeItem(item.entry.symbol)}
+                  />
+                ))}
+              </div>
+            )}
 
             <p className="mt-6 text-center text-xs text-slate-700">
               Live prices auto-refresh every 60 seconds

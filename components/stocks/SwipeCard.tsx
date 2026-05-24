@@ -265,14 +265,26 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
                   </div>
                 </div>
 
-                {/* Flip button */}
-                <div className="mt-auto" onPointerDown={(e) => e.stopPropagation()}>
+                {/* Action buttons */}
+                <div className="mt-auto flex gap-2" onPointerDown={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={async () => { await animate(x, -700, { duration: 0.35, ease: 'easeIn' }); onSkip() }}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors py-2.5 w-20 text-xs font-bold text-red-400"
+                  >
+                    ✕ Skip
+                  </button>
                   <button
                     onClick={() => setIsFlipped(true)}
-                    className="w-full rounded-xl bg-slate-700/60 hover:bg-slate-700 transition-colors py-2.5 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2"
+                    className="flex-1 rounded-xl bg-slate-700/60 hover:bg-slate-700 transition-colors py-2.5 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2"
                   >
-                    <span>View Analysis & Ratios</span>
+                    <span>Analysis & Ratios</span>
                     <span className="text-slate-500">→</span>
+                  </button>
+                  <button
+                    onClick={async () => { await animate(x, 700, { duration: 0.35, ease: 'easeIn' }); onWatch() }}
+                    className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors py-2.5 w-20 text-xs font-bold text-emerald-400"
+                  >
+                    ★ Watch
                   </button>
                 </div>
               </div>
