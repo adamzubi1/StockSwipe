@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { SwipeCard, SwipeCardHandle } from '@/components/stocks/SwipeCard'
+import { EmailCapture } from '@/components/EmailCapture'
 import type { StockData, WatchlistEntry } from '@/lib/stocks/types'
 
 function parseWatchlist(raw: string | null): WatchlistEntry[] {
@@ -111,6 +112,11 @@ export default function Home() {
         </Link>
       </nav>
 
+      {/* Email capture strip */}
+      <div className="shrink-0 border-b border-slate-800/60 py-2.5">
+        <EmailCapture variant="inline" />
+      </div>
+
       {/* Progress bar */}
       {!loading && stocks.length > 0 && (
         <div className="shrink-0 px-5 py-2">
@@ -168,6 +174,10 @@ export default function Home() {
               >
                 View Watchlist
               </Link>
+            </div>
+
+            <div className="w-full max-w-xs">
+              <EmailCapture variant="card" />
             </div>
           </div>
         )}
