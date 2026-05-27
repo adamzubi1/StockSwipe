@@ -1,276 +1,160 @@
-'use client'
-
-import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { SwipeCard, SwipeCardHandle } from '@/components/stocks/SwipeCard'
-import { RatioModal, type ActiveMetric } from '@/components/stocks/RatioModal'
 import { EmailCapture } from '@/components/EmailCapture'
-import type { StockData, WatchlistEntry, SkippedEntry } from '@/lib/stocks/types'
 
-function parseWatchlist(raw: string | null): WatchlistEntry[] {
-  try { return raw ? JSON.parse(raw) : [] } catch { return [] }
-}
+const FEATURES = [
+  {
+    icon: '📈',
+    title: 'Live Price Charts',
+    desc: 'View 5-day, 1-month, YTD, and 1-year charts for every stock and ETF before you decide.',
+  },
+  {
+    icon: '🔍',
+    title: 'Analyst Intelligence',
+    desc: 'Consensus ratings, price targets, and breakdowns from Wall Street analysts — right on the card.',
+  },
+  {
+    icon: '📊',
+    title: 'Deep Metrics',
+    desc: 'Tap any ratio — P/E, Beta, Market Cap — to get a plain-English explanation and industry peer comps.',
+  },
+  {
+    icon: '⭐',
+    title: 'Smart Watchlist',
+    desc: 'Track your saved stocks with live prices, gain/loss since you added them, and portfolio summary.',
+  },
+  {
+    icon: '↩',
+    title: 'Come Back Later',
+    desc: "Not sure? Defer a card to the end of the deck and revisit it after you've seen everything else.",
+  },
+  {
+    icon: '🔗',
+    title: 'Research Links',
+    desc: 'One tap to Yahoo Finance, Seeking Alpha, TipRanks, Finviz, and more — right from the card.',
+  },
+]
 
-function WatchlistCount() {
-  const [count, setCount] = useState(0)
-  useEffect(() => {
-    setCount(parseWatchlist(localStorage.getItem('stockswipe_watchlist')).length)
-    const handler = () =>
-      setCount(parseWatchlist(localStorage.getItem('stockswipe_watchlist')).length)
-    window.addEventListener('watchlist-updated', handler)
-    return () => window.removeEventListener('watchlist-updated', handler)
-  }, [])
+const TICKERS = ['AAPL', 'NVDA', 'MSFT', 'TSLA', 'GOOGL', 'META', 'AMZN', 'JPM', 'SPY', 'QQQ']
+
+export default function LandingPage() {
   return (
-    <span className="ml-1.5 rounded-full bg-blue-500 px-2 py-0.5 text-xs font-bold">
-      {count}
-    </span>
-  )
-}
-
-export default function Home() {
-  const [stocks, setStocks] = useState<StockData[]>([])
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [isMock, setIsMock] = useState(false)
-  const [watched, setWatched] = useState<string[]>([])
-  const [skipped, setSkipped] = useState<string[]>([])
-  const [lastAction, setLastAction] = useState<'watch' | 'skip' | 'defer' | null>(null)
-  const [activeMetric, setActiveMetric] = useState<ActiveMetric | null>(null)
-  const topCardRef = useRef<SwipeCardHandle>(null)
-
-  function parseSkipped(raw: string | null): SkippedEntry[] {
-    try { return raw ? JSON.parse(raw) : [] } catch { return [] }
-  }
-
-  useEffect(() => {
-    fetch('/api/stocks/queue')
-      .then((r) => r.json())
-      .then(({ stocks, isMock }) => {
-        setStocks(stocks)
-        setIsMock(isMock)
-      })
-      .finally(() => setLoading(false))
-  }, [])
-
-  const addToWatchlist = useCallback((stock: StockData) => {
-    const list = parseWatchlist(localStorage.getItem('stockswipe_watchlist'))
-    if (!list.find((e) => e.symbol === stock.symbol)) {
-      list.push({
-        symbol: stock.symbol,
-        name: stock.name,
-        addedAt: Date.now(),
-        priceWhenAdded: stock.price,
-      })
-      localStorage.setItem('stockswipe_watchlist', JSON.stringify(list))
-      window.dispatchEvent(new Event('watchlist-updated'))
-    }
-  }, [])
-
-  const handleWatch = useCallback(
-    (stock: StockData) => {
-      addToWatchlist(stock)
-      setWatched((p) => [...p, stock.symbol])
-      setLastAction('watch')
-      setCurrentIndex((i) => i + 1)
-    },
-    [addToWatchlist]
-  )
-
-  const handleSkip = useCallback((stock: StockData) => {
-    setSkipped((p) => [...p, stock.symbol])
-    setLastAction('skip')
-    setCurrentIndex((i) => i + 1)
-    // Persist to localStorage
-    const list = parseSkipped(localStorage.getItem('stockswipe_skipped'))
-    if (!list.find((e) => e.symbol === stock.symbol)) {
-      list.push({ symbol: stock.symbol, name: stock.name, skippedAt: Date.now(), priceWhenSkipped: stock.price })
-      localStorage.setItem('stockswipe_skipped', JSON.stringify(list))
-    }
-  }, [])
-
-  const handleDefer = useCallback(() => {
-    // Move the current top card to the end of the deck — user will see it again later
-    setStocks((prev) => {
-      const next = [...prev]
-      const [card] = next.splice(currentIndex, 1)
-      next.push(card)
-      return next
-    })
-    setLastAction('defer')
-    // Don't increment currentIndex — the next card slides into position naturally
-  }, [currentIndex])
-
-  const remaining = stocks.slice(currentIndex)
-  const isDone = !loading && stocks.length > 0 && remaining.length === 0
-
-  return (
-    <div className="flex h-screen flex-col">
+    <div className="min-h-screen bg-slate-950 text-white">
       {/* Nav */}
-      <nav className="flex shrink-0 items-center justify-between px-5 py-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-black tracking-tight text-white">StockSwipe</span>
-          {isMock && (
-            <span className="rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
-              demo data
+      <nav className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 max-w-5xl mx-auto">
+        <span className="text-xl font-black tracking-tight">StockSwipe</span>
+        <Link
+          href="/discover"
+          className="rounded-full bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+        >
+          Launch App →
+        </Link>
+      </nav>
+
+      {/* Hero */}
+      <section className="mx-auto max-w-3xl px-6 pt-20 pb-16 text-center">
+        {/* Ticker strip */}
+        <div className="mb-8 flex flex-wrap justify-center gap-2">
+          {TICKERS.map((t) => (
+            <span
+              key={t}
+              className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs font-bold text-slate-400"
+            >
+              {t}
             </span>
-          )}
+          ))}
+          <span className="rounded-full border border-slate-700 bg-slate-800/60 px-3 py-1 text-xs font-bold text-slate-600">
+            +74 more
+          </span>
         </div>
-        <div className="flex items-center gap-2">
+
+        <h1 className="mb-5 text-5xl font-black leading-tight tracking-tight sm:text-6xl">
+          Discover stocks
+          <br />
+          <span className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+            like swiping
+          </span>
+        </h1>
+
+        <p className="mx-auto mb-10 max-w-xl text-lg text-slate-400 leading-relaxed">
+          Swipe through 84 stocks and ETFs. Get live charts, analyst ratings, and deep metrics — all in one card.
+          Build a watchlist. Track your picks against analyst forecasts.
+        </p>
+
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <Link
-            href="/skipped"
-            className="flex items-center rounded-full bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+            href="/discover"
+            className="rounded-2xl bg-blue-600 px-8 py-4 text-base font-bold text-white hover:bg-blue-500 transition-colors shadow-lg shadow-blue-500/20"
           >
-            Skipped
+            Start Swiping — It&apos;s Free
           </Link>
           <Link
             href="/watchlist"
-            className="flex items-center rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+            className="rounded-2xl border border-slate-700 bg-slate-800/60 px-8 py-4 text-base font-semibold text-slate-300 hover:bg-slate-700 transition-colors"
           >
-            Watchlist
-            <WatchlistCount />
+            View Watchlist
           </Link>
         </div>
-      </nav>
+      </section>
 
-      {/* Email capture strip */}
-      <div className="shrink-0 border-b border-slate-800/60 py-2.5">
-        <EmailCapture variant="inline" />
-      </div>
-
-      {/* Progress bar */}
-      {!loading && stocks.length > 0 && (
-        <div className="shrink-0 px-5 py-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs text-slate-500">
-              {currentIndex} / {stocks.length} reviewed
-            </span>
-            <span className="text-xs text-slate-500">
-              {watched.length} watched · {skipped.length} skipped
-            </span>
-          </div>
-          <div className="h-1 rounded-full bg-slate-800">
-            <div
-              className="h-1 rounded-full bg-blue-500 transition-all duration-500"
-              style={{ width: `${(currentIndex / stocks.length) * 100}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Card area */}
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden px-4">
-        {loading && (
-          <div className="flex flex-col items-center gap-4 text-slate-400">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500" />
-            <p className="text-sm">Fetching market data…</p>
-          </div>
-        )}
-
-        {!loading && isDone && (
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="text-6xl">🎉</div>
-            <div>
-              <h2 className="mb-2 text-2xl font-bold text-white">All caught up!</h2>
-              <p className="text-slate-400">
-                You watched <span className="text-emerald-400 font-semibold">{watched.length}</span> stocks and
-                skipped <span className="text-red-400 font-semibold">{skipped.length}</span>.
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setCurrentIndex(0)
-                  setWatched([])
-                  setSkipped([])
-                  setLastAction(null)
-                }}
-                className="rounded-xl bg-slate-800 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-              >
-                Start Over
-              </button>
-              <Link
-                href="/watchlist"
-                className="rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
-              >
-                View Watchlist
-              </Link>
-            </div>
-
-            <div className="w-full max-w-xs">
-              <EmailCapture variant="card" />
-            </div>
-          </div>
-        )}
-
-        {!loading && !isDone && remaining.length > 0 && (
-          <div className="relative w-full max-w-sm" style={{ height: 'min(620px, calc(100vh - 200px))' }}>
-            {remaining.slice(0, 3).map((stock, i) => (
-              <SwipeCard
-                key={stock.symbol}
-                ref={i === 0 ? topCardRef : undefined}
-                stock={stock}
-                isTop={i === 0}
-                stackIndex={i}
-                onWatch={() => handleWatch(remaining[0])}
-                onSkip={() => handleSkip(remaining[0])}
-                onDefer={handleDefer}
-                onMetricClick={setActiveMetric}
-              />
+      {/* How it works */}
+      <section className="mx-auto max-w-4xl px-6 pb-16">
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-8">
+          <h2 className="mb-8 text-center text-sm font-semibold uppercase tracking-widest text-slate-500">
+            How it works
+          </h2>
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            {[
+              { step: '1', title: 'Swipe through stocks', desc: 'Each card shows live price, chart, analyst rating, and key stats.' },
+              { step: '2', title: 'Dig into the details', desc: 'Flip the card for full analyst data, ratios, and research links. Tap any metric for a full breakdown.' },
+              { step: '3', title: 'Build your watchlist', desc: 'Swipe right to save. Track performance vs. analyst targets in real time.' },
+            ].map((item) => (
+              <div key={item.step} className="flex flex-col items-center text-center">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-blue-600/20 text-lg font-black text-blue-400">
+                  {item.step}
+                </div>
+                <h3 className="mb-1.5 font-bold text-white">{item.title}</h3>
+                <p className="text-sm text-slate-400 leading-relaxed">{item.desc}</p>
+              </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Action buttons */}
-      {!loading && !isDone && (
-        <div className="shrink-0 flex flex-col items-center gap-2 py-4">
-          {/* Feedback */}
-          <div className="h-4 text-center">
-            {lastAction === 'watch' && <p className="text-xs font-semibold text-emerald-400">Added to watchlist!</p>}
-            {lastAction === 'skip'  && <p className="text-xs font-semibold text-red-400">Skipped</p>}
-            {lastAction === 'defer' && <p className="text-xs font-semibold text-slate-400">See you later!</p>}
-          </div>
-
-          <div className="flex items-center gap-5">
-            {/* Permanent skip */}
-            <button
-              onClick={() => topCardRef.current?.swipeLeft()}
-              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-500/40 bg-slate-900 text-2xl shadow-lg hover:border-red-400 hover:bg-red-500/10 transition-all active:scale-95"
-              aria-label="Skip"
-            >
-              ✕
-            </button>
-
-            {/* Defer — come back later */}
-            <button
-              onClick={() => topCardRef.current?.defer()}
-              className="flex flex-col items-center justify-center gap-0.5 h-12 w-12 rounded-full border-2 border-slate-600 bg-slate-900 shadow-md hover:border-slate-400 hover:bg-slate-800 transition-all active:scale-95"
-              aria-label="Skip for now — come back later"
-            >
-              <span className="text-lg leading-none">↩</span>
-              <span className="text-[9px] font-bold text-slate-500 leading-none">LATER</span>
-            </button>
-
-            {/* Watch */}
-            <button
-              onClick={() => topCardRef.current?.swipeRight()}
-              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-500/40 bg-slate-900 text-2xl shadow-lg hover:border-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-95"
-              aria-label="Watch"
-            >
-              ★
-            </button>
-          </div>
-
-          {currentIndex === 0 && (
-            <p className="text-xs text-slate-600">
-              ✕ skip · ↩ come back later · ★ watch
-            </p>
-          )}
         </div>
-      )}
+      </section>
 
-      {/* Ratio detail modal — rendered at page level so CSS 3D transforms don't clip it */}
-      <RatioModal metric={activeMetric} onClose={() => setActiveMetric(null)} />
+      {/* Features grid */}
+      <section className="mx-auto max-w-4xl px-6 pb-16">
+        <h2 className="mb-8 text-center text-sm font-semibold uppercase tracking-widest text-slate-500">
+          Everything you need
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 hover:border-slate-700 transition-colors"
+            >
+              <div className="mb-3 text-2xl">{f.icon}</div>
+              <h3 className="mb-1.5 font-bold text-white">{f.title}</h3>
+              <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Email capture */}
+      <section className="mx-auto max-w-lg px-6 pb-20 text-center">
+        <h2 className="mb-2 text-2xl font-black text-white">Stay in the loop</h2>
+        <p className="mb-6 text-slate-400">Get notified when new features and stocks are added.</p>
+        <EmailCapture variant="card" />
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800 py-8 text-center text-xs text-slate-600">
+        <p>StockSwipe · For informational purposes only · Not financial advice</p>
+        <div className="mt-3 flex justify-center gap-6">
+          <Link href="/discover" className="hover:text-slate-400 transition-colors">Discover</Link>
+          <Link href="/watchlist" className="hover:text-slate-400 transition-colors">Watchlist</Link>
+          <Link href="/skipped" className="hover:text-slate-400 transition-colors">Skipped</Link>
+        </div>
+      </footer>
     </div>
   )
 }

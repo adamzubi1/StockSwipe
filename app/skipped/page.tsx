@@ -195,7 +195,7 @@ export default function SkippedPage() {
     <div className="min-h-screen">
       <nav className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-slate-500 hover:text-slate-300 transition-colors text-sm">
+          <Link href="/discover" className="text-slate-500 hover:text-slate-300 transition-colors text-sm">
             ← Discover
           </Link>
           <span className="text-slate-700">|</span>
