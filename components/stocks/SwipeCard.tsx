@@ -9,12 +9,14 @@ import type { StockData } from '@/lib/stocks/types'
 export interface SwipeCardHandle {
   swipeRight: () => Promise<void>
   swipeLeft: () => Promise<void>
+  defer: () => Promise<void>
 }
 
 interface Props {
   stock: StockData
   onWatch: () => void
   onSkip: () => void
+  onDefer: () => void
   isTop: boolean
   stackIndex: number
 }
@@ -83,11 +85,17 @@ function researchLinks(symbol: string, quoteType: string): ResearchLink[] {
 // ── component ──────────────────────────────────────────────────────────────
 
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
-  ({ stock, onWatch, onSkip, isTop, stackIndex }, ref) => {
+  ({ stock, onWatch, onSkip, onDefer, isTop, stackIndex }, ref) => {
     const x = useMotionValue(0)
+    const y = useMotionValue(stackIndex * 14)
     const rotate = useTransform(x, [-300, 300], [-18, 18])
     const watchOpacity = useTransform(x, [20, 110], [0, 1])
     const skipOpacity  = useTransform(x, [-110, -20], [1, 0])
+
+    // Keep y in sync with stack position (animates smoothly when cards are promoted)
+    useEffect(() => {
+      animate(y, stackIndex * 14, { type: 'spring', stiffness: 300, damping: 30 })
+    }, [stackIndex, y])
 
     const [isFlipped, setIsFlipped] = useState(false)
     const [range, setRange] = useState<RangeKey>('1M')
@@ -121,6 +129,11 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
     useImperativeHandle(ref, () => ({
       swipeRight: async () => { await animate(x, 700, { duration: 0.35, ease: 'easeIn' }); onWatch() },
       swipeLeft:  async () => { await animate(x, -700, { duration: 0.35, ease: 'easeIn' }); onSkip() },
+      defer:      async () => {
+        await animate(y, -700, { duration: 0.38, ease: [0.4, 0, 0.6, 1] })
+        onDefer()
+        y.set(stackIndex * 14) // reset in case card stays mounted (small deck)
+      },
     }))
 
     const handleDragEnd = async (_: unknown, { offset, velocity }: { offset: { x: number }; velocity: { x: number } }) => {
@@ -139,7 +152,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
     const dayUp    = stock.changePercent >= 0
 
     const scale  = 1 - stackIndex * 0.045
-    const yOff   = stackIndex * 14
 
     const upside = stock.analyst?.targetMean && stock.price
       ? ((stock.analyst.targetMean - stock.price) / stock.price) * 100 : null
@@ -157,7 +169,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
 
     return (
       <motion.div
-        style={{ x, rotate, scale, y: yOff, zIndex: 100 - stackIndex, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ x, y, rotate, scale, zIndex: 100 - stackIndex, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
         drag={isTop && !isFlipped ? 'x' : false}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={0.8}
@@ -265,26 +277,14 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
                   </div>
                 </div>
 
-                {/* Action buttons */}
-                <div className="mt-auto flex gap-2" onPointerDown={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={async () => { await animate(x, -700, { duration: 0.35, ease: 'easeIn' }); onSkip() }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 transition-colors py-2.5 w-20 text-xs font-bold text-red-400"
-                  >
-                    ✕ Skip
-                  </button>
+                {/* Flip button */}
+                <div className="mt-auto" onPointerDown={(e) => e.stopPropagation()}>
                   <button
                     onClick={() => setIsFlipped(true)}
-                    className="flex-1 rounded-xl bg-slate-700/60 hover:bg-slate-700 transition-colors py-2.5 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2"
+                    className="w-full rounded-xl bg-slate-700/60 hover:bg-slate-700 transition-colors py-2.5 text-xs font-semibold text-slate-300 flex items-center justify-center gap-2"
                   >
-                    <span>Analysis & Ratios</span>
+                    <span>View Analysis & Ratios</span>
                     <span className="text-slate-500">→</span>
-                  </button>
-                  <button
-                    onClick={async () => { await animate(x, 700, { duration: 0.35, ease: 'easeIn' }); onWatch() }}
-                    className="flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors py-2.5 w-20 text-xs font-bold text-emerald-400"
-                  >
-                    ★ Watch
                   </button>
                 </div>
               </div>

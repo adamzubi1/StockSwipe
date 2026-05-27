@@ -351,10 +351,10 @@ function FilterBar({
         ))}
       </div>
 
-      {/* Sector / category */}
+      {/* Industry / category */}
       {presentSectors.length > 1 && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-          <span className="shrink-0 text-xs text-slate-600 w-12">Sector</span>
+          <span className="shrink-0 text-xs text-slate-600 w-16">Industry</span>
           <Chip
             label="All"
             active={filters.sector === ''}

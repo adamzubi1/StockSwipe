@@ -32,7 +32,7 @@ export default function Home() {
   const [isMock, setIsMock] = useState(false)
   const [watched, setWatched] = useState<string[]>([])
   const [skipped, setSkipped] = useState<string[]>([])
-  const [lastAction, setLastAction] = useState<'watch' | 'skip' | null>(null)
+  const [lastAction, setLastAction] = useState<'watch' | 'skip' | 'defer' | null>(null)
   const topCardRef = useRef<SwipeCardHandle>(null)
 
   useEffect(() => {
@@ -74,6 +74,18 @@ export default function Home() {
     setLastAction('skip')
     setCurrentIndex((i) => i + 1)
   }, [])
+
+  const handleDefer = useCallback(() => {
+    // Move the current top card to the end of the deck — user will see it again later
+    setStocks((prev) => {
+      const next = [...prev]
+      const [card] = next.splice(currentIndex, 1)
+      next.push(card)
+      return next
+    })
+    setLastAction('defer')
+    // Don't increment currentIndex — the next card slides into position naturally
+  }, [currentIndex])
 
   const remaining = stocks.slice(currentIndex)
   const isDone = !loading && stocks.length > 0 && remaining.length === 0
@@ -171,6 +183,7 @@ export default function Home() {
                 stackIndex={i}
                 onWatch={() => handleWatch(remaining[0])}
                 onSkip={() => handleSkip(remaining[0])}
+                onDefer={handleDefer}
               />
             ))}
           </div>
@@ -179,38 +192,50 @@ export default function Home() {
 
       {/* Action buttons */}
       {!loading && !isDone && (
-        <div className="shrink-0 flex items-center justify-center gap-8 py-5">
-          <button
-            onClick={() => topCardRef.current?.swipeLeft()}
-            className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-500/40 bg-slate-900 text-2xl shadow-lg hover:border-red-400 hover:bg-red-500/10 transition-all active:scale-95"
-            aria-label="Skip"
-          >
-            ✕
-          </button>
-
-          <div className="w-20 text-center">
-            {lastAction === 'watch' && (
-              <p className="text-xs font-semibold text-emerald-400 animate-pulse">Added!</p>
-            )}
-            {lastAction === 'skip' && (
-              <p className="text-xs font-semibold text-red-400 animate-pulse">Skipped</p>
-            )}
+        <div className="shrink-0 flex flex-col items-center gap-2 py-4">
+          {/* Feedback */}
+          <div className="h-4 text-center">
+            {lastAction === 'watch' && <p className="text-xs font-semibold text-emerald-400">Added to watchlist!</p>}
+            {lastAction === 'skip'  && <p className="text-xs font-semibold text-red-400">Skipped</p>}
+            {lastAction === 'defer' && <p className="text-xs font-semibold text-slate-400">See you later!</p>}
           </div>
 
-          <button
-            onClick={() => topCardRef.current?.swipeRight()}
-            className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-500/40 bg-slate-900 text-2xl shadow-lg hover:border-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-95"
-            aria-label="Watch"
-          >
-            ★
-          </button>
-        </div>
-      )}
+          <div className="flex items-center gap-5">
+            {/* Permanent skip */}
+            <button
+              onClick={() => topCardRef.current?.swipeLeft()}
+              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-500/40 bg-slate-900 text-2xl shadow-lg hover:border-red-400 hover:bg-red-500/10 transition-all active:scale-95"
+              aria-label="Skip"
+            >
+              ✕
+            </button>
 
-      {!loading && !isDone && currentIndex === 0 && (
-        <p className="shrink-0 pb-3 text-center text-xs text-slate-600">
-          Swipe right to watch · Swipe left to skip
-        </p>
+            {/* Defer — come back later */}
+            <button
+              onClick={() => topCardRef.current?.defer()}
+              className="flex flex-col items-center justify-center gap-0.5 h-12 w-12 rounded-full border-2 border-slate-600 bg-slate-900 shadow-md hover:border-slate-400 hover:bg-slate-800 transition-all active:scale-95"
+              aria-label="Skip for now — come back later"
+            >
+              <span className="text-lg leading-none">↩</span>
+              <span className="text-[9px] font-bold text-slate-500 leading-none">LATER</span>
+            </button>
+
+            {/* Watch */}
+            <button
+              onClick={() => topCardRef.current?.swipeRight()}
+              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-emerald-500/40 bg-slate-900 text-2xl shadow-lg hover:border-emerald-400 hover:bg-emerald-500/10 transition-all active:scale-95"
+              aria-label="Watch"
+            >
+              ★
+            </button>
+          </div>
+
+          {currentIndex === 0 && (
+            <p className="text-xs text-slate-600">
+              ✕ skip · ↩ come back later · ★ watch
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
