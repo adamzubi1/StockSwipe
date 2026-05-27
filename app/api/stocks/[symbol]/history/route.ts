@@ -1,14 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import YahooFinance from 'yahoo-finance2'
 import { generateMockPrices, type RangeKey } from '@/lib/stocks/history'
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+const yf = new YahooFinance()
 
-const YF_RANGE: Record<RangeKey, { interval: string; range: string }> = {
-  '5D':  { interval: '15m', range: '5d'  },
-  '1M':  { interval: '1d',  range: '1mo' },
-  '3M':  { interval: '1d',  range: '3mo' },
-  'YTD': { interval: '1d',  range: 'ytd' },
-  '1Y':  { interval: '1d',  range: '1y'  },
+type IntervalKey = '1m' | '2m' | '5m' | '15m' | '30m' | '60m' | '90m' | '1h' | '1d' | '5d' | '1wk' | '1mo' | '3mo'
+
+function getPeriod1(rangeKey: RangeKey): Date {
+  const now = new Date()
+  switch (rangeKey) {
+    case '5D':  return new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000)
+    case '1M':  return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+    case '3M':  return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
+    case 'YTD': return new Date(now.getFullYear(), 0, 1)
+    case '1Y':  return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
+    default:    return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  }
+}
+
+const INTERVAL: Record<RangeKey, IntervalKey> = {
+  '5D':  '15m',
+  '1M':  '1d',
+  '3M':  '1d',
+  'YTD': '1d',
+  '1Y':  '1d',
 }
 
 export async function GET(
@@ -21,26 +36,21 @@ export async function GET(
   const price = parseFloat(req.nextUrl.searchParams.get('price') ?? '100')
   const beta = parseFloat(req.nextUrl.searchParams.get('beta') ?? '1')
 
-  const yf = YF_RANGE[rangeKey] ?? YF_RANGE['1M']
-
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${upper}?interval=${yf.interval}&range=${yf.range}`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA },
-      next: { revalidate: 300 },
+    const result = await yf.chart(upper, {
+      period1: getPeriod1(rangeKey),
+      interval: INTERVAL[rangeKey] ?? '1d',
     })
 
-    if (res.ok) {
-      const data = await res.json()
-      const result = data.chart?.result?.[0]
-      const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? []
-      const valid = closes.filter((c): c is number => c != null && isFinite(c))
-      if (valid.length >= 5) {
-        return NextResponse.json({ prices: valid, source: 'live' })
-      }
+    const closes = (result.quotes ?? [])
+      .map((q) => q.close)
+      .filter((c): c is number => c != null && isFinite(c))
+
+    if (closes.length >= 5) {
+      return NextResponse.json({ prices: closes, source: 'live' })
     }
   } catch {
-    // fall through
+    // fall through to mock
   }
 
   const prices = generateMockPrices(upper, price, beta, rangeKey)

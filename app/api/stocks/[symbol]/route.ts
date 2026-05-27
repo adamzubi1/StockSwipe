@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import YahooFinance from 'yahoo-finance2'
 import { MOCK_STOCKS } from '@/lib/stocks/mockData'
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+const yf = new YahooFinance()
 
 export async function GET(
   _req: NextRequest,
@@ -11,60 +12,45 @@ export async function GET(
   const upper = symbol.toUpperCase()
 
   try {
-    const [quoteRes, analystRes] = await Promise.all([
-      fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${upper}`, {
-        headers: { 'User-Agent': UA },
-        next: { revalidate: 60 },
-      }),
-      fetch(`https://query2.finance.yahoo.com/v10/finance/quoteSummary/${upper}?modules=financialData,recommendationTrend`, {
-        headers: { 'User-Agent': UA },
-        next: { revalidate: 3600 },
-      }),
+    const [quote, summary] = await Promise.all([
+      yf.quote(upper),
+      yf.quoteSummary(upper, {
+        modules: ['financialData', 'recommendationTrend'],
+      }).catch(() => null),
     ])
 
-    if (!quoteRes.ok) throw new Error('quote fetch failed')
+    const fd = summary?.financialData
+    const rt = summary?.recommendationTrend?.trend?.[0]
 
-    const quoteData = await quoteRes.json()
-    const q = quoteData.quoteResponse?.result?.[0]
-    if (!q) throw new Error('no quote result')
-
-    let analyst = null
-    if (analystRes.ok) {
-      const ad = await analystRes.json()
-      const fd = ad.quoteSummary?.result?.[0]?.financialData
-      const rt = ad.quoteSummary?.result?.[0]?.recommendationTrend?.trend?.[0]
-      if (fd) {
-        analyst = {
-          targetLow: fd.targetLowPrice?.raw ?? null,
-          targetHigh: fd.targetHighPrice?.raw ?? null,
-          targetMean: fd.targetMeanPrice?.raw ?? null,
-          ratingKey: fd.recommendationKey ?? 'hold',
-          ratingScore: fd.recommendationMean?.raw ?? null,
-          analystCount: fd.numberOfAnalystOpinions?.raw ?? 0,
-          strongBuy: rt?.strongBuy ?? 0,
-          buy: rt?.buy ?? 0,
-          hold: rt?.hold ?? 0,
-          sell: rt?.sell ?? 0,
-          strongSell: rt?.strongSell ?? 0,
-        }
-      }
-    }
+    const analyst = fd ? {
+      targetLow:    fd.targetLowPrice  ?? null,
+      targetHigh:   fd.targetHighPrice ?? null,
+      targetMean:   fd.targetMeanPrice ?? null,
+      ratingKey:    fd.recommendationKey ?? 'hold',
+      ratingScore:  fd.recommendationMean ?? null,
+      analystCount: fd.numberOfAnalystOpinions ?? 0,
+      strongBuy:    rt?.strongBuy  ?? 0,
+      buy:          rt?.buy        ?? 0,
+      hold:         rt?.hold       ?? 0,
+      sell:         rt?.sell       ?? 0,
+      strongSell:   rt?.strongSell ?? 0,
+    } : null
 
     return NextResponse.json({
       stock: {
-        symbol: q.symbol,
-        name: q.shortName || q.longName || q.symbol,
-        price: q.regularMarketPrice ?? 0,
-        change: q.regularMarketChange ?? 0,
-        changePercent: q.regularMarketChangePercent ?? 0,
-        marketCap: q.marketCap ?? null,
-        volume: q.regularMarketVolume ?? 0,
-        avgVolume: q.averageDailyVolume3Month ?? null,
-        beta: q.beta ?? null,
-        week52Low: q.fiftyTwoWeekLow ?? 0,
-        week52High: q.fiftyTwoWeekHigh ?? 0,
-        pe: q.trailingPE ?? null,
-        quoteType: q.quoteType ?? 'EQUITY',
+        symbol:        quote.symbol,
+        name:          quote.shortName ?? quote.longName ?? quote.symbol,
+        price:         quote.regularMarketPrice         ?? 0,
+        change:        quote.regularMarketChange        ?? 0,
+        changePercent: quote.regularMarketChangePercent ?? 0,
+        marketCap:     quote.marketCap                  ?? null,
+        volume:        quote.regularMarketVolume        ?? 0,
+        avgVolume:     quote.averageDailyVolume3Month   ?? null,
+        beta:          quote.beta                       ?? null,
+        week52Low:     quote.fiftyTwoWeekLow            ?? 0,
+        week52High:    quote.fiftyTwoWeekHigh           ?? 0,
+        pe:            quote.trailingPE                 ?? null,
+        quoteType:     quote.quoteType                  ?? 'EQUITY',
         analyst,
       },
     })

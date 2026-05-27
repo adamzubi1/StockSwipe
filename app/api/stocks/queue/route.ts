@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
+import YahooFinance from 'yahoo-finance2'
 import { MOCK_STOCKS } from '@/lib/stocks/mockData'
 import type { AnalystData } from '@/lib/stocks/types'
+
+const yf = new YahooFinance()
 
 const SYMBOLS = [
   // Large-cap tech
@@ -33,43 +36,26 @@ const SYMBOLS = [
   'EFA', 'EEM',
 ]
 
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
-
-async function fetchQuotes(symbols: string[]) {
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?lang=en-US&region=US&symbols=${symbols.join(',')}`
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA },
-    next: { revalidate: 60 },
-  })
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.quoteResponse?.result ?? null
-}
-
 async function fetchAnalystData(symbol: string): Promise<AnalystData | null> {
   try {
-    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${symbol}?modules=financialData,recommendationTrend`
-    const res = await fetch(url, {
-      headers: { 'User-Agent': UA },
-      next: { revalidate: 3600 },
+    const summary = await yf.quoteSummary(symbol, {
+      modules: ['financialData', 'recommendationTrend'],
     })
-    if (!res.ok) return null
-    const data = await res.json()
-    const fd = data.quoteSummary?.result?.[0]?.financialData
-    const rt = data.quoteSummary?.result?.[0]?.recommendationTrend?.trend?.[0]
+    const fd = summary.financialData
+    const rt = summary.recommendationTrend?.trend?.[0]
     if (!fd) return null
     return {
-      targetLow: fd.targetLowPrice?.raw ?? null,
-      targetHigh: fd.targetHighPrice?.raw ?? null,
-      targetMean: fd.targetMeanPrice?.raw ?? null,
-      ratingKey: fd.recommendationKey ?? 'hold',
-      ratingScore: fd.recommendationMean?.raw ?? null,
-      analystCount: fd.numberOfAnalystOpinions?.raw ?? 0,
-      strongBuy: rt?.strongBuy ?? 0,
-      buy: rt?.buy ?? 0,
-      hold: rt?.hold ?? 0,
-      sell: rt?.sell ?? 0,
-      strongSell: rt?.strongSell ?? 0,
+      targetLow:    fd.targetLowPrice  ?? null,
+      targetHigh:   fd.targetHighPrice ?? null,
+      targetMean:   fd.targetMeanPrice ?? null,
+      ratingKey:    fd.recommendationKey ?? 'hold',
+      ratingScore:  fd.recommendationMean ?? null,
+      analystCount: fd.numberOfAnalystOpinions ?? 0,
+      strongBuy:    rt?.strongBuy  ?? 0,
+      buy:          rt?.buy        ?? 0,
+      hold:         rt?.hold       ?? 0,
+      sell:         rt?.sell       ?? 0,
+      strongSell:   rt?.strongSell ?? 0,
     }
   } catch {
     return null
@@ -78,31 +64,31 @@ async function fetchAnalystData(symbol: string): Promise<AnalystData | null> {
 
 export async function GET() {
   try {
-    const quotes = await fetchQuotes(SYMBOLS)
-    if (!quotes || quotes.length === 0) {
+    const quotes = await yf.quote(SYMBOLS)
+    const quoteArr = Array.isArray(quotes) ? quotes : [quotes]
+
+    if (!quoteArr.length) {
       return NextResponse.json({ stocks: MOCK_STOCKS, isMock: true })
     }
 
-    const analystResults = await Promise.all(
-      SYMBOLS.map((s) => fetchAnalystData(s))
-    )
+    const analystResults = await Promise.all(SYMBOLS.map(fetchAnalystData))
     const analystMap = Object.fromEntries(SYMBOLS.map((s, i) => [s, analystResults[i]]))
 
-    const stocks = quotes.map((q: Record<string, unknown>) => ({
-      symbol: q.symbol,
-      name: (q.shortName as string) || (q.longName as string) || q.symbol,
-      price: (q.regularMarketPrice as number) ?? 0,
-      change: (q.regularMarketChange as number) ?? 0,
-      changePercent: (q.regularMarketChangePercent as number) ?? 0,
-      marketCap: (q.marketCap as number) ?? null,
-      volume: (q.regularMarketVolume as number) ?? 0,
-      avgVolume: (q.averageDailyVolume3Month as number) ?? null,
-      beta: (q.beta as number) ?? null,
-      week52Low: (q.fiftyTwoWeekLow as number) ?? 0,
-      week52High: (q.fiftyTwoWeekHigh as number) ?? 0,
-      pe: (q.trailingPE as number) ?? null,
-      quoteType: (q.quoteType as string) ?? 'EQUITY',
-      analyst: analystMap[q.symbol as string] ?? null,
+    const stocks = quoteArr.map((q) => ({
+      symbol:        q.symbol,
+      name:          q.shortName ?? q.longName ?? q.symbol,
+      price:         q.regularMarketPrice         ?? 0,
+      change:        q.regularMarketChange        ?? 0,
+      changePercent: q.regularMarketChangePercent ?? 0,
+      marketCap:     q.marketCap                  ?? null,
+      volume:        q.regularMarketVolume        ?? 0,
+      avgVolume:     q.averageDailyVolume3Month   ?? null,
+      beta:          q.beta                       ?? null,
+      week52Low:     q.fiftyTwoWeekLow            ?? 0,
+      week52High:    q.fiftyTwoWeekHigh           ?? 0,
+      pe:            q.trailingPE                 ?? null,
+      quoteType:     q.quoteType                  ?? 'EQUITY',
+      analyst:       analystMap[q.symbol]         ?? null,
     }))
 
     return NextResponse.json({ stocks, isMock: false })
