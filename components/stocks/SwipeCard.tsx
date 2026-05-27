@@ -5,6 +5,7 @@ import { motion, useMotionValue, useTransform, animate } from 'framer-motion'
 import { PriceChart } from './PriceChart'
 import { generateMockPrices, ALL_RANGES, type RangeKey } from '@/lib/stocks/history'
 import type { StockData } from '@/lib/stocks/types'
+import type { ActiveMetric } from './RatioModal'
 
 export interface SwipeCardHandle {
   swipeRight: () => Promise<void>
@@ -17,6 +18,7 @@ interface Props {
   onWatch: () => void
   onSkip: () => void
   onDefer: () => void
+  onMetricClick?: (m: ActiveMetric) => void
   isTop: boolean
   stackIndex: number
 }
@@ -85,7 +87,9 @@ function researchLinks(symbol: string, quoteType: string): ResearchLink[] {
 // ── component ──────────────────────────────────────────────────────────────
 
 export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
-  ({ stock, onWatch, onSkip, onDefer, isTop, stackIndex }, ref) => {
+  ({ stock, onWatch, onSkip, onDefer, onMetricClick, isTop, stackIndex }, ref) => {
+    const tap = (key: string, value: number | null) =>
+      onMetricClick?.({ key, value, symbol: stock.symbol })
     const x = useMotionValue(0)
     const y = useMotionValue(stackIndex * 14)
     const rotate = useTransform(x, [-300, 300], [-18, 18])
@@ -329,12 +333,19 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
 
                 {/* Analyst consensus */}
                 {stock.analyst ? (
-                  <div className="mb-3 rounded-2xl bg-slate-700/40 p-3.5">
+                  <div
+                    className="mb-3 rounded-2xl bg-slate-700/40 p-3.5 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.99]"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => tap('analystConsensus', stock.analyst?.ratingScore ?? null)}
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Analyst Consensus</span>
-                      <span className={`text-sm font-bold ${ratingColor(stock.analyst.ratingKey)}`}>
-                        {RATING_LABELS[stock.analyst.ratingKey] ?? stock.analyst.ratingKey}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-sm font-bold ${ratingColor(stock.analyst.ratingKey)}`}>
+                          {RATING_LABELS[stock.analyst.ratingKey] ?? stock.analyst.ratingKey}
+                        </span>
+                        <span className="text-slate-600 text-xs">›</span>
+                      </div>
                     </div>
                     {totalA > 0 && (
                       <div className="mb-2 flex h-2 overflow-hidden rounded-full">
@@ -363,8 +374,15 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
 
                 {/* Price target range */}
                 {stock.analyst?.targetLow != null && stock.analyst?.targetHigh != null && targetPct != null && (
-                  <div className="mb-3 rounded-2xl bg-slate-700/40 p-3.5">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Price Target Range</p>
+                  <div
+                    className="mb-3 rounded-2xl bg-slate-700/40 p-3.5 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.99]"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => tap('analystTarget', stock.analyst?.targetMean ?? null)}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Price Target Range</p>
+                      <span className="text-slate-600 text-xs">›</span>
+                    </div>
                     <div className="flex items-center gap-3">
                       <span className="w-12 text-xs font-medium text-red-400">${stock.analyst.targetLow.toFixed(0)}</span>
                       <div className="relative flex-1">
@@ -378,30 +396,61 @@ export const SwipeCard = forwardRef<SwipeCardHandle, Props>(
                 )}
 
                 {/* Key ratios grid */}
-                <div className="mb-3 grid grid-cols-2 gap-2.5 text-xs">
-                  <div className="rounded-2xl bg-slate-700/40 p-3">
-                    <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs mb-1">Volatility (β)</p>
+                <div className="mb-3 grid grid-cols-2 gap-2.5 text-xs" onPointerDown={(e) => e.stopPropagation()}>
+                  <div
+                    className="rounded-2xl bg-slate-700/40 p-3 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.98]"
+                    onClick={() => tap('beta', stock.beta)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Volatility (β)</p>
+                      <span className="text-slate-600 text-xs">›</span>
+                    </div>
                     <p className="text-xl font-bold text-white">{stock.beta?.toFixed(2) ?? '—'}</p>
                     <p className={`text-xs ${bColor}`}>{bLabel}</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-700/40 p-3">
-                    <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs mb-1">P/E Ratio</p>
+                  <div
+                    className="rounded-2xl bg-slate-700/40 p-3 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.98]"
+                    onClick={() => tap('pe', stock.pe)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs">P/E Ratio</p>
+                      <span className="text-slate-600 text-xs">›</span>
+                    </div>
                     <p className="text-xl font-bold text-white">{stock.pe?.toFixed(1) ?? '—'}</p>
                     <p className="text-xs text-slate-400">Trailing 12M</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-700/40 p-3">
-                    <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs mb-1">Market Cap</p>
+                  <div
+                    className="rounded-2xl bg-slate-700/40 p-3 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.98]"
+                    onClick={() => tap('marketCap', stock.marketCap)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Market Cap</p>
+                      <span className="text-slate-600 text-xs">›</span>
+                    </div>
                     <p className="text-xl font-bold text-white">{fmtCap(stock.marketCap)}</p>
                   </div>
-                  <div className="rounded-2xl bg-slate-700/40 p-3">
-                    <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs mb-1">Avg Volume</p>
+                  <div
+                    className="rounded-2xl bg-slate-700/40 p-3 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.98]"
+                    onClick={() => tap('avgVolume', stock.avgVolume)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-slate-400 font-semibold uppercase tracking-wider text-xs">Avg Volume</p>
+                      <span className="text-slate-600 text-xs">›</span>
+                    </div>
                     <p className="text-xl font-bold text-white">{stock.avgVolume ? fmtVol(stock.avgVolume) : '—'}</p>
                   </div>
                 </div>
 
                 {/* 52-week range */}
-                <div className="mb-3 rounded-2xl bg-slate-700/40 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">52-Week Range</p>
+                <div
+                  className="mb-3 rounded-2xl bg-slate-700/40 p-3 cursor-pointer hover:bg-slate-700/60 transition-colors active:scale-[0.99]"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => tap('week52', week52Pct)}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">52-Week Range</p>
+                    <span className="text-slate-600 text-xs">›</span>
+                  </div>
                   <div className="flex items-center gap-3 text-xs text-slate-400">
                     <span>${stock.week52Low.toFixed(2)}</span>
                     <div className="relative flex-1">

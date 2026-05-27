@@ -35,3 +35,10 @@ export interface WatchlistEntry {
   addedAt: number
   priceWhenAdded: number
 }
+
+export interface SkippedEntry {
+  symbol: string
+  name: string
+  skippedAt: number
+  priceWhenSkipped: number
+}

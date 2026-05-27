@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { SwipeCard, SwipeCardHandle } from '@/components/stocks/SwipeCard'
+import { RatioModal, type ActiveMetric } from '@/components/stocks/RatioModal'
 import { EmailCapture } from '@/components/EmailCapture'
-import type { StockData, WatchlistEntry } from '@/lib/stocks/types'
+import type { StockData, WatchlistEntry, SkippedEntry } from '@/lib/stocks/types'
 
 function parseWatchlist(raw: string | null): WatchlistEntry[] {
   try { return raw ? JSON.parse(raw) : [] } catch { return [] }
@@ -34,7 +35,12 @@ export default function Home() {
   const [watched, setWatched] = useState<string[]>([])
   const [skipped, setSkipped] = useState<string[]>([])
   const [lastAction, setLastAction] = useState<'watch' | 'skip' | 'defer' | null>(null)
+  const [activeMetric, setActiveMetric] = useState<ActiveMetric | null>(null)
   const topCardRef = useRef<SwipeCardHandle>(null)
+
+  function parseSkipped(raw: string | null): SkippedEntry[] {
+    try { return raw ? JSON.parse(raw) : [] } catch { return [] }
+  }
 
   useEffect(() => {
     fetch('/api/stocks/queue')
@@ -74,6 +80,12 @@ export default function Home() {
     setSkipped((p) => [...p, stock.symbol])
     setLastAction('skip')
     setCurrentIndex((i) => i + 1)
+    // Persist to localStorage
+    const list = parseSkipped(localStorage.getItem('stockswipe_skipped'))
+    if (!list.find((e) => e.symbol === stock.symbol)) {
+      list.push({ symbol: stock.symbol, name: stock.name, skippedAt: Date.now(), priceWhenSkipped: stock.price })
+      localStorage.setItem('stockswipe_skipped', JSON.stringify(list))
+    }
   }, [])
 
   const handleDefer = useCallback(() => {
@@ -103,13 +115,21 @@ export default function Home() {
             </span>
           )}
         </div>
-        <Link
-          href="/watchlist"
-          className="flex items-center rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-        >
-          Watchlist
-          <WatchlistCount />
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/skipped"
+            className="flex items-center rounded-full bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
+          >
+            Skipped
+          </Link>
+          <Link
+            href="/watchlist"
+            className="flex items-center rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+          >
+            Watchlist
+            <WatchlistCount />
+          </Link>
+        </div>
       </nav>
 
       {/* Email capture strip */}
@@ -194,6 +214,7 @@ export default function Home() {
                 onWatch={() => handleWatch(remaining[0])}
                 onSkip={() => handleSkip(remaining[0])}
                 onDefer={handleDefer}
+                onMetricClick={setActiveMetric}
               />
             ))}
           </div>
@@ -247,6 +268,9 @@ export default function Home() {
           )}
         </div>
       )}
+
+      {/* Ratio detail modal — rendered at page level so CSS 3D transforms don't clip it */}
+      <RatioModal metric={activeMetric} onClose={() => setActiveMetric(null)} />
     </div>
   )
 }
